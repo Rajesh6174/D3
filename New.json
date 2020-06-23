@@ -5,7 +5,7 @@
         {
           "name": "Afghanistan",
           "region": "South Asia",
-          "year": 1865,
+          "year": 2019,
           "income": 1704,
           "lifeExpectancy": 27.5,
           "population": 4071829,
@@ -14,7 +14,7 @@
         {
           "name": "Albania",
           "region": "Europe & Central Asia",
-          "year": 1865,
+          "year": 2019,
           "income": 742,
           "lifeExpectancy": 35.4,
           "population": 1581418,
@@ -28,7 +28,7 @@
         {
           "name": "Afghanistan",
           "region": "South Asia",
-          "year": 1866,
+          "year": 2020,
           "income": 1704,
           "lifeExpectancy": 7.5,
           "population": 4071829,
@@ -37,7 +37,7 @@
         {
           "name": "Albania",
           "region": "Europe & Central Asia",
-          "year": 1866,
+          "year": 2020,
           "income": 743,
           "lifeExpectancy": 55.4,
           "population": 1581418,
