@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<script src="https://d3js.org/d3.v4.js"></script>
+
+<div id="chart"></div>
+
+<script>
+var startYear = 2019;
+var numYears = 2;
+var maxLabels = 2;
+
+var margin = { top: 20, left: 30, bottom: 40, right: 20 };
+var width = 960 - margin.left - margin.right;
+var height = 500 - margin.top - margin.bottom;
+
+// Scales to help us map the input data to screen coordinates.
+var x = d3.scaleLog().base(2).domain([100, 128000]).range([0, width]);
+var y = d3.scaleLinear().domain([0, 90]).range([height, 0]);
+var r = d3.scaleSqrt().domain([0, 5e7]).range([1, 100]);
+var t = d3.scaleSqrt().domain([0, 5e7]).rangeRound([11, 48]).clamp(true);
+var c = d3.scaleOrdinal(d3.schemeCategory10);
+var o = d3.scaleLinear().domain([0, 250]).range([0.25, 0.9]).clamp(true);
+
+// Helper functions to map the data onto the visualization.
+function xPosition(d) {
+    return x(d.income);
+}
+
+function yPosition(d) {
+    return y(d.lifeExpectancy);
+}
+
+function radius(d) {
+    return r(d.population);
+}
+
+function textSize(d) {
+    return t(d.population);
+}
+
+function color(d) {
+    return c(d.region);
+}
+
+function opacity(d) {
+    return o(d.interest);
+}
+
+// Calculate how far a country's bubble will move on the screen during the given time
+// window before and after the current year.
+function movementInTimeWindow(country, index, window) {
+    var startIndex = Math.max(0, index - window);
+    var endIndex = Math.min(numYears - 1, index + window + 1);
+    var totalMovement = 0;
+    for (var i = startIndex; i < endIndex; i++) {
+        var xDiff = x(country.income[i + 1]) - x(country.income[i]);
+        var yDiff = y(country.lifeExpectancy[i + 1]) - y(country.lifeExpectancy[i]);
+        var movement = Math.sqrt(xDiff * xDiff + yDiff * yDiff);
+        totalMovement += movement;
+    }
+    return totalMovement;
+}
+
+// Maximum of the total movement, in a window of 3 years before and after the current
+// year (to avoid having the labels flash on and off too quickly).
+function maxMovement(country, index) {
+    var window = 3;
+    var maxMovement = 0.0;
+    for (var i = index - window; i < index + window + 1; i++) {
+        var movement = movementInTimeWindow(country, i, window);
+        if (movement > maxMovement) maxMovement = movement;
+    }
+    return maxMovement;
+}
+
+// Use the precalculated value for "interest" to decide whether to show a label
+// for this country and year. Thresholds set by trial and error.
+function showLabel(d) {
+    return d.interest > 250 && radius(d) >= 1.7;
+}
+
+// Defines a sort order so that the smallest dots are drawn last (on top).
+function radiusDescending(a, b) {
+    return d3.descending(radius(a), radius(b));
+}
+
+// Create an SVG element so we can add circles and labels inside it.
+var svg = d3.select("#chart").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom);
+
+var g = svg.append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+// x axis and label.
+g.append("g")
+    .attr("class", "axis")
+    .attr("transform", "translate(0," + height + ")")
+    .call(d3.axisBottom(x).ticks(10).tickFormat(d3.format(".0s")))
+    .append("text")
+    .attr("x", width)
+    .attr("y", -6)
+    .attr("text-anchor", "end")
+    .attr("fill", "black")
+    .text("income per capita, inflation-adjusted (dollars)");
+
+// y axis and label.
+g.append("g")
+    .attr("class", "axis")
+    .call(d3.axisLeft(y))
+    .append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("y", 6)
+    .attr("dy", "0.71em")
+    .attr("text-anchor", "end")
+    .attr("fill", "black")
+    .text("life expectancy (years)");
+
+// Groups for the circles and labels (with labels on top)
+g.append("g")
+    .attr("id", "circles");
+
+g.append("g")
+    .attr("id", "labels");
+
+// Add the year label and initialize with the starting year.
+var yearLabel = g.append("text")
+    .attr("id", "year")
+    .attr("text-anchor", "end")
+    .attr("y", height - 36)
+    .attr("x", width)
+    .text(startYear);
+
+// Add an overlay so we can make the year interactive.
+var box = yearLabel.node().getBBox();
+
+var overlay = g.append("rect")
+    .attr("id", "overlay")
+    .attr("x", box.x)
+    .attr("y", box.y)
+    .attr("width", box.width)
+    .attr("height", box.height)
+    .on("mouseover", function() {
+        yearLabel.classed("active", true);
+    })
+    .on("mouseout", function() {
+        yearLabel.classed("active", false);
+    });
+
+var yearScale = d3.scaleLinear()
+    .domain([0, numYears - 1])
+    .range([box.x + 10, box.x + box.width - 10])
+    .clamp(true);
+
+d3.json("https://raw.githubusercontent.com/Rajesh6174/D3/master/New.json", function(data) {
+
+    // Original JSON is organized by country and then year to help it be 
+    // more compact, but for visualization we want it by year first.
+
+
+    // Iterate through the years in the data set, changing the display
+    // for each year. Pause before moving to the next year.
+    var yearIndex = 0;
+    var yearInterval = 800;
+    var transitionDuration = yearInterval - 300;
+    var interval = d3.interval(function() {
+        displayYear(data[yearIndex], transitionDuration);
+        if (yearIndex++ >= numYears - 1) interval.stop();
+    }, yearInterval);
+    console.log(interval);
+
+    // Make the year display interactive, so the user can mouse over it to change it.
+    function mousemove() {
+        var yearIndex = Math.round(yearScale.invert(d3.mouse(g.node())[0]));
+        if (data[yearIndex]) {
+            interval.stop();
+            displayYear(data[yearIndex], 0);
+        }
+    }
+    d3.select("#overlay")
+        .on("mousemove", mousemove)
+        .on("touchmove", mousemove);
+});
+
+
+// Updates the display to show the specified year's data.
+function displayYear(yearData, transitionDuration) {
+    var currentYear = yearData.year;
+    var currentYearData = yearData.countries.sort(radiusDescending);
+    // Find which countries meet the threshold of interest and show the largest N.
+    var labelData = currentYearData.filter(showLabel).slice(0, maxLabels);
+    // Function to determine whether a particular country has a label in this year.
+    var hasLabel = function(d) {
+        return (labelData.some(function(country) {
+            return country.name === d.name;
+        }));
+    };
+    // Transition for moving circles and labels.
+    var movementTransition = d3.transition()
+        .duration(transitionDuration)
+        .ease(d3.easeLinear);
+    // Transition for appearing circles and labels (shorter than for moving).    
+    var appearTransition = d3.transition()
+        .duration(Math.min(200, transitionDuration / 2))
+        .ease(d3.easeLinear);
+    drawCircles(currentYearData, hasLabel, movementTransition, appearTransition);
+    drawLabels(labelData, movementTransition, appearTransition);
+    yearLabel.text(currentYear);
+}
+
+// Draw circles and labels corresponding to the given year.
+function drawCircles(currentYearData, hasLabel, movementTransition, appearTransition) {
+
+    // Data join for circles. (No exit because we keep the same countries all the time).
+    var circle = d3.select("#circles").selectAll(".country")
+        .data(currentYearData, function(d) { return d.name; });
+
+    // Update: transition size, position, opacity, and stroke of all circles.
+    circle
+        .transition(movementTransition)
+        .attr("stroke", function(d) {
+            return hasLabel(d) ? "black" : null;
+        })
+        .attr("fill-opacity", opacity)
+        .attr("cx", xPosition)
+        .attr("cy", yPosition)
+        .attr("r", radius);
+
+    // Enter: what to do with new circles at the beginning of the animation.
+    var circleEnter = circle.enter()
+        .append("circle")
+        .attr("class", "country")
+        .attr("fill", color)
+        .attr("cx", xPosition)
+        .attr("cy", yPosition);
+
+    // Add a tooltip to each circle.
+    circleEnter
+        .append("title")
+        .text(function(d) { return d.name; });
+
+    // Make sure the entered circles are in the original data order.
+    circle.order();
+
+    // Now make them visible with a short transition.
+    circleEnter
+        .transition(appearTransition)
+        .attr("stroke", function(d) {
+            return hasLabel(d) ? "black" : null;
+        })
+        .attr("fill-opacity", opacity)
+        .attr("r", radius)
+}
+
+function labelTransform(d) {
+    return "translate(" + (xPosition(d) - radius(d)) + "," +
+        (yPosition(d) - radius(d)) + ")";
+}
+
+// Draw labels for selected circles: a main label plus a white outline.
+function drawLabels(labelData, movementTransition, appearTransition) {
+
+    var label = d3.select("#labels").selectAll(".label")
+        .data(labelData, function(d) { return d.name; });
+
+    // Exit: remove labels for countries that no longer need them.
+    label.exit()
+        .transition(appearTransition)
+        .style("fill-opacity", 0)
+        .style("stroke-opacity", 0)
+        .remove();
+
+    // Update: change the size and position of existing labels.
+    label
+        .transition(movementTransition)
+        .style("font-size", textSize)
+        .attr("transform", labelTransform);
+
+    // Enter: add new labels and set up their basic appearance. Set their
+    // opacity to 0 so that we can make them visible with a transition.
+    var labelEnter = label.enter()
+        .append("g")
+        .attr("class", "label")
+        .attr("transform", labelTransform)
+        .style("font-size", textSize)
+        .style("fill-opacity", 0)
+        .style("stroke-opacity", 0);
+
+    // Add the white outline
+    labelEnter.append("text")
+        .text(function(d) { return d.name; })
+        .attr("class", "outline")
+        .attr("dx", "-5px")
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "end");
+
+    // Add the label itself
+    labelEnter.append("text")
+        .text(function(d) { return d.name; })
+        .attr("dx", "-5px")
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "end");
+
+    // Make sure the labels are in data order
+    label.order();
+
+    // Now use a transition to make the entered labels visible.
+    labelEnter
+        .transition(appearTransition)
+        .style("fill-opacity", 1)
+        .style("stroke-opacity", 1);
+};
+</script>
