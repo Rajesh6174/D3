@@ -3,12 +3,12 @@
       "name": "Afghanistan",
       "region": "South Asia",
       "income": [
-        704,
+        1704,
         707
       ],
       "lifeExpectancy": [
         27.5,
-        27.5
+        127.5
       ],
       "population": [
         4071829,
@@ -24,7 +24,7 @@
       ],
       "lifeExpectancy": [
         35.4,
-        35.4
+        135.4
       ],
       "population": [
         581418,
